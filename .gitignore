@@ -1,0 +1,9 @@
+face_dataset_64x64.npy
+fractal_dataset_64x64_rgb.npy
+
+quality_fractal_dataset_64x64_rgb.npy
+
+All_fractals.npy
+
+fractal_images.npy
+fractal_labels.npy
