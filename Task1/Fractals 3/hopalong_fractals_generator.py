@@ -9,70 +9,49 @@ from datashader.colors import inferno, viridis
 from colorcet import fire
 from tqdm.notebook import tqdm
 
-
 # =====================
 #     CONFIGURAZIONE
 # =====================
 IMG_SIZE = 64
 N_POINTS = 100000
-TOTAL_IMAGES = 24000  # <- modifica qui la dimensione del dataset finale
-
+TOTAL_IMAGES = 18000  # Dimensione dataset finale
 
 # =====================
 #   ATTRATTORI
 # =====================
 def trajectory(fn, x0, y0, a, b=0, c=0, d=0, e=0, f=0, n=N_POINTS):
-    """Genera traiettoria dell'attrattore scelto."""
     x, y = np.zeros(n), np.zeros(n)
     x[0], y[0] = x0, y0
     for i in range(n - 1):
         x[i+1], y[i+1] = fn(x[i], y[i], a, b, c, d, e, f)
     return pd.DataFrame({'x': x, 'y': y})
 
-
-def fractal_dream(x, y, a, b, c, d, *o):
-    return sin(y * b) + c * sin(x * b), sin(x * a) + d * sin(y * a)
-
-
 def hopalong(x, y, a, b, c, *o):
     return y - sqrt(fabs(b * x - c)) * np.sign(x), a - x
 
-
-def de_jong(x, y, a, b, c, d, *o):
-    return sin(a * y) - cos(b * x), sin(c * x) - cos(d * y)
-
-
-def clifford(x, y, a, b, c, d, *o):
-    return sin(a * y) + c * cos(a * x), sin(b * x) + d * cos(b * y)
-
-
-ATTRACTORS = [fractal_dream, hopalong, de_jong, clifford]
-
+ATTRACTORS = [hopalong]  # solo hopalong
 
 # =====================
 #   VALIDAZIONE IMMAGINE
 # =====================
 def is_image_valid(agg, min_density=0.15):
-    """Verifica che l'immagine abbia una densità minima di pixel significativi."""
     non_zero = np.count_nonzero(agg.values)
     total = agg.values.size
     return (non_zero / total) >= min_density
 
-
 # =====================
 #  GENERAZIONE IMMAGINE
 # =====================
-def generate_fractal_by_type(fn, width=IMG_SIZE, height=IMG_SIZE, max_attempts=10):
-    """Genera un'immagine frattale da un singolo attrattore."""
+def generate_fractal_by_type(fn, width=IMG_SIZE, height=IMG_SIZE, max_attempts=10, current_cmap=None):
     attempts = 0
+    cmap_list = [inferno, viridis, fire]
 
     while attempts < max_attempts:
-        if fn.__name__ == "fractal_dream":
-            params = [random.uniform(-1, 1), random.uniform(-1, 1)] + [random.uniform(-2, 2) for _ in range(4)]
-        elif fn.__name__ == "hopalong":
-            params = [random.uniform(-1, 1), random.uniform(-1, 1)] + [random.uniform(-2, 2) for _ in range(3)]
-        else:
-            params = [random.uniform(-1, 1), random.uniform(-1, 1)] + [random.uniform(-2, 2) for _ in range(4)]
+        params = [
+            random.uniform(-1, 1), random.uniform(-1, 1),
+            random.uniform(-2, 2), random.uniform(-2, 2),
+            random.uniform(-2, 2)
+        ]
 
         try:
             df = trajectory(fn, *params, n=N_POINTS)
@@ -80,10 +59,13 @@ def generate_fractal_by_type(fn, width=IMG_SIZE, height=IMG_SIZE, max_attempts=1
             agg = cvs.points(df, 'x', 'y')
 
             if is_image_valid(agg):
-                cmap = random.choice([inferno, viridis, fire])
+                cmap = cmap_list[current_cmap]
+                cmap_label = current_cmap
+
                 img = tf.shade(agg, cmap=cmap, alpha=255)
                 pil_img = tf.Image.to_pil(img)
-                return pil_img.convert("RGB"), params
+
+                return pil_img.convert("RGB"), (params, cmap_label)
 
             attempts += 1
 
@@ -92,30 +74,31 @@ def generate_fractal_by_type(fn, width=IMG_SIZE, height=IMG_SIZE, max_attempts=1
 
     return None, None
 
+def generate_fractal_fallback(fn, used_signatures, current_cmap):
+    cmap_list = [inferno, viridis, fire]
+    fallback_params = [
+        [0.1, 0.1, 1.8],
+        [0.2, -0.3, 1.5],
+        [0.5, 0.7, -1.2],
+    ]
 
-def generate_fractal_fallback(fn, used_signatures):
-    """Genera un'immagine fallback evitando duplicati."""
-    fallback_params = {
-        fractal_dream: [[0.1, 0.1, 1.8, -1.2, 0.5, -0.8]],
-        clifford: [[0.5, -0.5, -1.7, 1.3]],
-        de_jong: [[0.3, 0.3, 2.0, -2.0, 1.5, -1.5]]
-    }
-
-    for params in fallback_params.get(fn, []):
+    for params in fallback_params:
         df = trajectory(fn, *params, n=N_POINTS)
         cvs = ds.Canvas(plot_width=IMG_SIZE, plot_height=IMG_SIZE)
         agg = cvs.points(df, 'x', 'y')
-        cmap = random.choice([inferno, viridis, fire])
+
+        cmap = cmap_list[current_cmap]
+        cmap_label = current_cmap
+
         img = tf.shade(agg, cmap=cmap, alpha=255)
         pil_img = tf.Image.to_pil(img).convert("RGB")
 
         sig = hash(pil_img.tobytes())
         if sig not in used_signatures:
             used_signatures.add(sig)
-            return pil_img, params
+            return pil_img, (params, cmap_label)
 
     return None, None
-
 
 # =====================
 #   CREAZIONE DATASET
@@ -124,41 +107,44 @@ from tqdm.auto import tqdm
 import time
 
 def create_balanced_fractal_dataset(total_images=TOTAL_IMAGES):
-    per_type = total_images // len(ATTRACTORS)
+    per_palette = total_images // 3  # divisione perfetta
 
     dataset = []
     labels = []
     used_signatures = set()
-    stats = {fn.__name__: 0 for fn in ATTRACTORS}
-    rejected_counts = {fn.__name__: 0 for fn in ATTRACTORS}
+    stats = {0: 0, 1: 0, 2: 0}
+    rejected_counts = {0: 0, 1: 0, 2: 0}
 
-    print(f"\nGenerazione dataset bilanciato: {per_type} immagini per ciascun attrattore")
+    print(f"\nGenerazione dataset hopalong bilanciato: {per_palette} immagini per palette")
 
     total_progress = tqdm(
-        total=total_images,
+        total=per_palette * 3,
         desc="Generazione dataset",
         bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]"
     )
 
     start_time = time.time()
+    fn = hopalong
 
-    for label, fn in enumerate(ATTRACTORS):
+    for current_cmap in [0, 1, 2]:
         count = 0
-        while count < per_type:
-            img, params = generate_fractal_by_type(fn)
+        while count < per_palette:
+            img, out = generate_fractal_by_type(fn, current_cmap=current_cmap)
 
             if img is None:
-                img, params = generate_fractal_fallback(fn, used_signatures)
-                rejected_counts[fn.__name__] += 1
+                img, out = generate_fractal_fallback(fn, used_signatures, current_cmap)
+                rejected_counts[current_cmap] += 1
                 if img is None:
                     continue
 
+            params, cmap_label = out
             sig = hash(img.tobytes())
+
             if sig not in used_signatures:
                 used_signatures.add(sig)
                 dataset.append(np.array(img) / 255.0)
-                labels.append(label)
-                stats[fn.__name__] += 1
+                labels.append(cmap_label)
+                stats[cmap_label] += 1
                 count += 1
                 total_progress.update(1)
 
@@ -171,20 +157,22 @@ def create_balanced_fractal_dataset(total_images=TOTAL_IMAGES):
     dataset = np.array(dataset)
     labels = np.array(labels)
 
-    np.save("fractal_images1.png", dataset)
-    np.save("fractal_labels1.npy", labels)
+    np.save("hopalong_images.npy", dataset)
+    np.save("hopalong_labels.npy", labels)
 
-    print("\nDataset generato correttamente.")
+    print("\nDataset generato.")
     print(f"Shape immagini: {dataset.shape}")
     print(f"Shape labels:   {labels.shape}")
 
-    print("\nDistribuzione immagini per attrattore:")
-    for fn, count in stats.items():
-        print(f"{fn}: {count}")
+    print("\nDistribuzione immagini per palette:")
+    print(f"inferno (0): {stats[0]}")
+    print(f"viridis (1): {stats[1]}")
+    print(f"fire    (2): {stats[2]}")
 
-    print("\nImmagini scartate per attrattore:")
-    for fn, r in rejected_counts.items():
-        print(f"{fn}: {r}")
+    print("\nFallback per palette:")
+    print(f"inferno (0): {rejected_counts[0]}")
+    print(f"viridis (1): {rejected_counts[1]}")
+    print(f"fire    (2): {rejected_counts[2]}")
 
     return dataset, labels
 
@@ -193,7 +181,3 @@ def create_balanced_fractal_dataset(total_images=TOTAL_IMAGES):
 # =====================
 if __name__ == "__main__":
     create_balanced_fractal_dataset()
-
-
-
-
