@@ -13,9 +13,9 @@ from tqdm.notebook import tqdm
 # =====================
 #     CONFIGURAZIONE
 # =====================
-IMG_SIZE = 1920
+IMG_SIZE = 64
 N_POINTS = 100000
-TOTAL_IMAGES = 4  # <- modifica qui la dimensione del dataset finale
+TOTAL_IMAGES = 24000  # <- modifica qui la dimensione del dataset finale
 
 
 # =====================
