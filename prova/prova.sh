@@ -1,5 +1,8 @@
 #!/bin/bash
 
+source /vol/home/s4949404/miniconda3/etc/profile.d/conda.sh
+conda activate IDL2
+
 # === SETTINGS ===
 NOTEBOOKS=(
     "prova1.ipynb"
