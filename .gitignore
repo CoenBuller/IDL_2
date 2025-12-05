@@ -36,3 +36,6 @@ de_jong_vae_generated_1000.npy
 de_jong_gan_generated_1000.npy
 clifford_vae_generated_1000.npy
 clifford_gan_generated_1000.npy
+
+dream_images.npy
+dream_labels.npy
