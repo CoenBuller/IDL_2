@@ -1,4 +1,12 @@
 #!/bin/bash
+
+# === ENABLE GPU SUPPORT ===
+export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+export LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LIBRARY_PATH
+export CUDA_HOME=/usr
+export PATH=/usr/lib/x86_64-linux-gnu:$PATH
+
+# === ACTIVATE YOUR ENV ===
 source /vol/home/s4949404/miniconda3/etc/profile.d/conda.sh
 conda activate IDL2
 
