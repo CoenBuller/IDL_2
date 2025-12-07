@@ -18,6 +18,8 @@ fire_hop_gan_generated_1000.npy
 vividis_hop_vae_generated_1000.npy
 vividis_hop_gan_generated_1000.npy
 
+inferno_dream_vae_generated_1000.npy
+inferno_dream_gan_generated_1000.npy
 inf_dream_vae_generated_1000.npy
 inf_dream_gan_generated_1000.npy
 fire_dream_vae_generated_1000.npy
@@ -39,3 +41,18 @@ clifford_gan_generated_1000.npy
 
 dream_images.npy
 dream_labels.npy
+
+all_gan_generated_1000.npy
+all_vae_generated_1000.npy
+
+all_dream_gan_generated_1000.npy
+all_dream_vae_generated_1000.npy
+
+all_hop_gan_generated_1000.npy
+all_hop_vae_generated_1000.npy
+
+hop_gan_generated_1000.npy
+hop_vae_generated_1000.npy
+
+inferno_hop_vae_generated_1000.npy
+inferno_hop_gan_generated_1000.npy
